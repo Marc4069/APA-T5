@@ -208,6 +208,7 @@ pantalla, debe hacerse en formato *markdown*).
 
 ##### Código de `estereo2mono()`
 
+```python
 def estereo2mono(ficEste, ficMono, canal=2):
     '''
     Convierte un archivo (ficEste) de estéreo a mono, el fichero mono resultante
@@ -240,9 +241,10 @@ def estereo2mono(ficEste, ficMono, canal=2):
     with open(ficMono, 'wb') as f:
         f.write(empaquetar_cabecera(1, info['sample_rate'], 16, len(datos_mono)))
         f.write(datos_mono)
-
+```
 ##### Código de `mono2estereo()`
 
+```python
 def mono2estereo(ficIzq, ficDer, ficEste):
     '''
     A partir de dos ficheros mono, uno que corresponde al canal izquierdo y otro al derecho, 
@@ -267,9 +269,9 @@ def mono2estereo(ficIzq, ficDer, ficEste):
     with open(ficEste, 'wb') as fpEste:
         fpEste.write(empaquetar_cabecera(2, info_izq['sample_rate'], 16, len(datos_estereo)))
         fpEste.write(datos_estereo)
-
+```
 ##### Código de `codEstereo()`
-
+```python
 def codEstereo(ficEste, ficCod):
     '''
     Lee el fichero ficEste, que contiene una señal estéreo codificada con PCM lineal de 16 bits,
@@ -291,9 +293,9 @@ def codEstereo(ficEste, ficCod):
     with open(ficCod, 'wb') as fpDos:
         fpDos.write(empaquetar_cabecera(1, info['sample_rate'], 32, len(datos_cod)))
         fpDos.write(datos_cod)
-
+```
 ##### Código de `decEstereo()`
-
+```python
 def decEstereo(ficCod, ficEste):
     '''
     Lee el fichero ficCod con una señal monofónica de 32 bits en la que 
@@ -327,7 +329,7 @@ def decEstereo(ficCod, ficEste):
     with open(ficEste, 'wb') as fpEste:
          fpEste.write(empaquetar_cabecera(2, info['sample_rate'], 16, len(datos_estereo)))
          fpEste.write(datos_estereo)
-
+```
 
 #### Subida del resultado al repositorio GitHub y *pull-request*
 
