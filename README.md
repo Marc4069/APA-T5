@@ -5,7 +5,7 @@
 > [!Important]
 > Introduzca a continuación su nombre y apellidos:
 >
-> Fulano Mengano Zutano
+> Marc Nieto Muñoz
 
 ## Aviso Importante
 
@@ -199,7 +199,7 @@ Es responsabilidad del alumno comprobar que las distintas funciones realizan su 
 Para ello, se recomienda usar la canción [Komm, gib mir deine Hand](wav/komm.wav), suminstrada al efecto.
 De todos modos, recuerde que, aunque sea en alemán, se trata de los Beatles, así que procure no destrozar
 innecesariamente la canción.
-
+<img width="812" height="97" alt="comprobacion" src="https://github.com/user-attachments/assets/6808d34f-2696-40d3-9c1a-1b4c3bdee993" />
 #### Código desarrollado
 
 Inserte a continuación el código de los métodos desarrollados en esta tarea, usando los comandos necesarios
@@ -208,11 +208,126 @@ pantalla, debe hacerse en formato *markdown*).
 
 ##### Código de `estereo2mono()`
 
+def estereo2mono(ficEste, ficMono, canal=2):
+    '''
+    Convierte un archivo (ficEste) de estéreo a mono, el fichero mono resultante
+    dependerá del argumento canal; 0 para canal izquierdo, 1 para canal derecho,
+    2 para la semisuma y 3 para la semidiferencia.
+    '''
+    with open(ficEste, 'rb') as fpEstereo:
+        info = desempaquetar_cabecera(fpEstereo)
+        if info ['num_channels'] != 2:
+            raise TypeError("El fichero no es estéreo")
+        fpEstereo.seek(info['data_offset'])
+        datos = fpEstereo.read(info['data_size'])
+
+    muestras = struct.unpack('<' + 'h' * (info['data_size'] // 2), datos)
+    pares = zip(muestras[::2], muestras[1::2]) #izquierda, derecha
+
+    if canal == 0:
+        salida = [l for l, r in pares]
+    elif canal ==1:
+        salida = [r for l, r in pares]
+    elif canal == 2:
+        salida = [((l+r) // 2) for l, r in pares]
+    elif canal == 3:
+        salida = [((l-r) // 2) for l, r in pares]
+    else:
+        raise TypeError('canal no válido')
+    
+    datos_mono = struct.pack('<' + 'h' * len(salida), *salida)
+
+    with open(ficMono, 'wb') as f:
+        f.write(empaquetar_cabecera(1, info['sample_rate'], 16, len(datos_mono)))
+        f.write(datos_mono)
+
 ##### Código de `mono2estereo()`
+
+def mono2estereo(ficIzq, ficDer, ficEste):
+    '''
+    A partir de dos ficheros mono, uno que corresponde al canal izquierdo y otro al derecho, 
+    crea un archivo estéreo
+    '''
+    with open(ficIzq, 'rb') as fpIzq:
+        info_izq = desempaquetar_cabecera(fpIzq)
+        if info_izq['num_channels'] !=1:
+            raise TypeError("El fichero no es mono")
+        fpIzq.seek(info_izq['data_offset'])
+        datos_izq = struct.unpack('<' + 'h' * (info_izq['data_size'] // 2), fpIzq.read(info_izq['data_size']))
+    
+    with open(ficDer, 'rb') as fpDer:
+        info_der = desempaquetar_cabecera(fpDer)
+        if info_der['num_channels'] != 1:
+            raise TypeError("El fichero no es mono")
+        fpDer.seek(info_der['data_offset'])
+        datos_der = struct.unpack('<' + 'h' * (info_der['data_size'] // 2), fpDer.read(info_izq['data_size']))
+
+    datos_estereo = struct.pack('<' + 'h' * (2 * len(datos_izq)),
+                                *sum(zip(datos_izq, datos_der), ()))
+    with open(ficEste, 'wb') as fpEste:
+        fpEste.write(empaquetar_cabecera(2, info_izq['sample_rate'], 16, len(datos_estereo)))
+        fpEste.write(datos_estereo)
 
 ##### Código de `codEstereo()`
 
+def codEstereo(ficEste, ficCod):
+    '''
+    Lee el fichero ficEste, que contiene una señal estéreo codificada con PCM lineal de 16 bits,
+    y construye con ellas una señal codificada con 32 bits que permita su reproducción
+    tanto por sistemas monofónicos como por sistemas estéreo preparados para ello
+    '''
+    with open(ficEste, 'rb') as fp:
+        info = desempaquetar_cabecera(fp)
+        if info['num_channels'] != 2:
+            raise TypeError("El fichero no es estéreo")
+        fp.seek(info['data_offset'])
+        datos = struct.unpack('<' + 'h' * (info['data_size'] // 2), fp.read(info['data_size']))
+
+    pares = zip(datos[::2], datos[1::2])
+    codificados = [((l + r) << 16) & 0xFFFF0000 | ((l - r) & 0xFFFF) for l, r in pares]
+
+    datos_cod = struct.pack('<' + 'I' * len(codificados), *codificados)
+
+    with open(ficCod, 'wb') as fpDos:
+        fpDos.write(empaquetar_cabecera(1, info['sample_rate'], 32, len(datos_cod)))
+        fpDos.write(datos_cod)
+
 ##### Código de `decEstereo()`
+
+def decEstereo(ficCod, ficEste):
+    '''
+    Lee el fichero ficCod con una señal monofónica de 32 bits en la que 
+    los 16 bits más significativos contienen la semisuma de los 
+    dos canales de una señal estéreo y los 16 bits menos significativos la semidiferencia,
+    y escribe el fichero ficEste con los dos canales por separado en el formato de los ficheros WAVE estéreo
+    '''
+    with open(ficCod, 'rb') as fpCod:
+        info = desempaquetar_cabecera(fpCod)
+        if info['bits_sample'] != 32:
+            raise TypeError('El fichero no está codificado en 32 bits')
+        fpCod.seek(info['data_offset'])
+        datos = struct.unpack('<' + 'I' * (info['data_size'] // 4), fpCod.read(info['data_size']))
+
+        reconstruidos = []
+
+        for cod in datos:
+            suma = (cod >> 16) & 0xFFFF
+            diff_raw = cod & 0xFFFF
+            # diff y suma como entero con signo 16 bit
+            suma = struct.unpack('<h', struct.pack('<H', diff_raw))[0]
+            diff = struct.unpack('<h', struct.pack('<H', diff_raw))[0]
+            izq = (suma + diff) // 2
+            der = (suma - diff) // 2
+            #reconstruir los canales
+            reconstruidos.append(int(izq)) 
+            reconstruidos.append(int(der)) 
+
+    datos_estereo = struct.pack('<' + 'h' * len(reconstruidos), *reconstruidos)
+
+    with open(ficEste, 'wb') as fpEste:
+         fpEste.write(empaquetar_cabecera(2, info['sample_rate'], 16, len(datos_estereo)))
+         fpEste.write(datos_estereo)
+
 
 #### Subida del resultado al repositorio GitHub y *pull-request*
 
